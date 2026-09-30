@@ -48,14 +48,17 @@ matplotlib and requests.
 
 ## Running
 
-    python src/build_panel.py               # locate and validate each locus
+    python src/multi_gene_comparison.py     # locate and validate each locus
     python src/statistical_analysis_v2.py   # chi-square, FDR, odds ratios, FST
     python src/sensitivity_analysis.py      # allele-number sensitivity check
-    python src/figures_light.py             # the five paper figures
+    python src/plot_panel_v2.py             # the five paper figures
 
-`build_panel.py` must run first; the others read its output. Expect
-`statistical_analysis_v2.py` to take several minutes, since it queries gnomAD
-per locus with retries. Responses are cached, so reruns are fast.
+`multi_gene_comparison.py` must run first; the others read its output.
+Expect `statistical_analysis_v2.py` to take several minutes, since it queries
+gnomAD per locus with retries. Responses are cached, so reruns are fast.
+
+Paths in the scripts are relative to the repository root. If you have moved
+files, check the constants at the top of each script.
 
 ## Outputs
 
@@ -65,7 +68,11 @@ per locus with retries. Responses are cached, so reruns are fast.
 | `outputs/stats/statistical_comparison_v2.csv` | 78 comparisons: odds ratios, CIs, q-values, per-locus FST |
 | `outputs/stats/sensitivity_genotype_rate.csv` | baseline against upper-bound allele number |
 | `outputs/stats/sensitivity_genotype_rate_per_locus.csv` | per-locus sensitivity detail |
-| `figures/panel_*_light.png` | the five figures as they appear in the paper |
+| `figures/panel_bars_light.png` | per-locus frequencies across seven groups |
+| `figures/panel_heatmap_light.png` | all loci by population, India column outlined |
+| `figures/panel_deviation_light.png` | deviation from global pooled frequency, by category |
+| `figures/panel_forest_light.png` | odds ratios with 95% CIs, all 78 comparisons |
+| `figures/panel_elevation_light.png` | populations each locus is significantly elevated against |
 
 ## A note on allele identity
 
