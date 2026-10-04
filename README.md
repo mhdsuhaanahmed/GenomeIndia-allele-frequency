@@ -67,7 +67,6 @@ files, check the constants at the top of each script.
 | `outputs/multi_gene/full_panel.csv` | 13 validated loci, frequencies across 7 groups |
 | `outputs/stats/statistical_comparison_v2.csv` | 78 comparisons: odds ratios, CIs, q-values, per-locus FST |
 | `outputs/stats/sensitivity_genotype_rate.csv` | baseline against upper-bound allele number |
-| `outputs/stats/sensitivity_genotype_rate_per_locus.csv` | per-locus sensitivity detail |
 | `figures/panel_bars_light.png` | per-locus frequencies across seven groups |
 | `figures/panel_heatmap_light.png` | all loci by population, India column outlined |
 | `figures/panel_deviation_light.png` | deviation from global pooled frequency, by category |
