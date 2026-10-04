@@ -49,8 +49,8 @@ matplotlib and requests.
 ## Running
 
     python src/multi_gene_comparison.py     # locate and validate each locus
-    python src/statistical_analysis_v2.py   # chi-square, FDR, odds ratios, FST
-    python src/sensitivity_analysis.py      # allele-number sensitivity check
+python src/statistical_analysis_v2.py   # Fisher exact, FDR, odds ratios, FST   
+python src/sensitivity_analysis.py      # allele-number sensitivity check
     python src/plot_panel_v2.py             # the five paper figures
 
 `multi_gene_comparison.py` must run first; the others read its output.
