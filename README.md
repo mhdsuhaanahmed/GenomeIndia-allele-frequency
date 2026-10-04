@@ -23,8 +23,7 @@ Three independent validations support the comparison:
 - CYP2C9\*2 rs1799853 reproduces its documented near-absence in East Asian
   populations, odds ratio 106.8 (95% CI 26.7 to 428.0)
 - Panel-wide Hudson FST between GenomeIndia and gnomAD South Asian is 0.00182,
-  against 0.032 to 0.076 for all other reference populations, and is stable
-  across every panel size tested
+  against 0.032 to 0.076 for all other reference populations
 
 ## Data sources
 
@@ -36,14 +35,18 @@ statistics archive and extract the TSVs into `data/`. No registration or
 data use agreement is required.
 
 **gnomAD v4.** Fetched at runtime through the public GraphQL API at
-https://gnomad.broadinstitute.org/api. No key required. The API is
-unreliable under load; the scripts retry and cache responses.
+https://gnomad.broadinstitute.org/api. No key required. The API rate-limits
+under load; the scripts back off and retry, and cache responses so reruns are
+fast.
 
 ## Requirements
 
 ```bash
 pip install -r requirements.txt
 ```
+
+Python 3.11 or later. The scripts use pandas, numpy, scipy, statsmodels,
+matplotlib and requests.
 
 ## Running
 
@@ -53,10 +56,15 @@ python src/statistical_analysis_v2.py   # Fisher exact, FDR, odds ratios, FST
 python src/sensitivity_analysis.py      # allele-number sensitivity check
 python src/plot_panel_v2.py             # the five paper figures
 ```
-Three supporting scripts are not part of the main pipeline: verify_alleles.py
-(allele-identity confirmation against Ensembl VEP and dbSNP), window_search.py
-(the VKORC1 absence check), and query_gnomad_variant.py (direct variant-ID
-lookup, used to resolve the multi-allelic CYP2C19 site).
+
+`multi_gene_comparison.py` must run first; the others read its output. Paths in
+all scripts are relative to the repository root.
+
+Three further scripts are not part of the pipeline. `verify_alleles.py` confirms
+each selected allele against Ensembl VEP independently of the code that selected
+it, and exits non-zero if any locus fails. `window_search.py` is the VKORC1
+absence check. `query_gnomad_variant.py` dumps raw VEP consequences for a single
+rsID, which is useful when a new locus misbehaves.
 
 ## Outputs
 
@@ -65,6 +73,7 @@ lookup, used to resolve the multi-allelic CYP2C19 site).
 | `outputs/multi_gene/full_panel.csv` | 13 validated loci, frequencies across 7 groups |
 | `outputs/stats/statistical_comparison_v2.csv` | 78 comparisons: odds ratios, CIs, q-values, per-locus FST |
 | `outputs/stats/sensitivity_genotype_rate.csv` | baseline against upper-bound allele number |
+| `outputs/stats/sensitivity_genotype_rate_per_locus.csv` | per-locus elevation counts at both bounds |
 | `figures/panel_bars_light.png` | per-locus frequencies across seven groups |
 | `figures/panel_heatmap_light.png` | all loci by population, India column outlined |
 | `figures/panel_deviation_light.png` | deviation from global pooled frequency, by category |
@@ -77,18 +86,29 @@ Allele identity at every locus was confirmed against Ensembl VEP or dbSNP before
 any frequency was used. This is not optional and it is the main methodological
 point of the study.
 
-An rsID identifies a genomic position, not a substitution. Four of the loci
-examined sit at multi-allelic sites, and at each of them the gnomAD rsID search
-endpoint returns several variant identifiers. Taking the first result gives the
-wrong allele. CYP2C19 rs4244285 initially matched G>T rather than the G>A
-defining the \*2 allele, and SLC30A8 rs13266634 was discarded entirely after
-the two databases were found to be describing different substitutions at the
-same coordinate.
+An rsID identifies a genomic position, not a substitution. Four loci in this
+panel sit at multi-allelic sites, where the gnomAD rsID search endpoint returns
+several variant identifiers. The first result is not reliably wrong — it is
+reliably unverified. For CYP2C19 rs4244285 the first hit is G>T rather than the
+G>A that defines \*2; for DPYD rs3918290 the first hit happens to be correct.
+Nothing distinguishes the two cases without checking. SLC30A8 rs13266634 was
+discarded entirely after the two databases were found to describe different
+substitutions at the same coordinate.
 
-Missense variants can be resolved by protein consequence through Ensembl VEP.
-Splice variants cannot, since every substitution at a canonical splice site
-produces the same annotation, and those were resolved instead through dbSNP
-allele-level frequency reporting and HGVS notation.
+A second and separate problem is strand. The allele named in the clinical
+literature and the alternate allele in the genomic representation are
+complements on minus-strand genes: MTHFR C677T is G>A genomically, and DPYD
+c.1905+1G>A is C>T. Two of the thirteen loci are affected, and careful rsID
+handling does not catch it — the gap is between clinical naming and genomic
+representation. The panel therefore records the literature allele and the
+expected genomic ALT as separate fields.
+
+Resolution method depends on the locus. Missense variants are settled by protein
+consequence through Ensembl VEP, since only one substitution at a given position
+produces a given amino acid change. Splice variants cannot be settled that way:
+every substitution at a canonical splice donor returns the same consequence term
+and no amino acid change. DPYD \*2A and CYP2C19 \*2 are resolved instead through
+HGVS coding notation, which names the base change explicitly.
 
 ## Known limitation in the source data
 
