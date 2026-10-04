@@ -1,0 +1,22 @@
+﻿# GenomeIndia source data — not redistributed, see README
+data/
+*.tsv
+*.tsv.gz
+*.vcf
+*.vcf.gz
+
+# gnomAD response cache — regenerated on run
+outputs/multi_gene/gnomad_counts_cache_v2.json
+
+# incomplete pipeline output
+outputs/multi_gene/full_panel_INCOMPLETE.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/

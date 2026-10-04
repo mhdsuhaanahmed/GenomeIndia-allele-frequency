@@ -5,16 +5,21 @@ Tests whether the conclusions depend on the assumed Indian allele number.
 
 The main analysis assumes AN_india = 2 * 9768 * GENOTYPE_RATE with
 GENOTYPE_RATE = 0.98, the consortium's stated minimum. That is a floor, not a
-measurement: the true per-site genotyping rate is somewhere between 0.98 and
+measurement: the true per-site genotyping rate lies somewhere between 0.98 and
 1.00 and is not reported per variant. This script re-runs every comparison at
-the upper bound (GENOTYPE_RATE = 1.0) and reports what changes.
+the upper bound and reports what changes.
 
 Nothing on the gnomAD side changes, so the only thing moving is the precision
-of the Indian arm. Point estimates of the odds ratio are almost invariant;
-what can move is the width of the CI and, at the margin, FDR significance.
+of the Indian arm. Point estimates are near-invariant; what can move is the
+width of the CI and, at the margin, FDR significance.
+
+Loci are keyed on (gene, rsid), never on gene alone, because CYP2C9*2 and
+CYP2C9*3 share a gene name and their opposite deviations are a result of the
+study. A gene-level groupby silently merges them.
 
 Input : outputs/stats/statistical_comparison_v2.csv
-Output: outputs/stats/sensitivity_genotype_rate.csv  (+ printed summary)
+Output: outputs/stats/sensitivity_genotype_rate.csv
+        outputs/stats/sensitivity_genotype_rate_per_locus.csv
 """
 
 import os
@@ -25,15 +30,18 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-BASE = r"D:\GENOMEINDIA"
+BASE      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATS_DIR = os.path.join(BASE, "outputs", "stats")
-IN_CSV = os.path.join(STATS_DIR, "statistical_comparison_v2.csv")
-OUT_CSV = os.path.join(STATS_DIR, "sensitivity_genotype_rate.csv")
+IN_CSV    = os.path.join(STATS_DIR, "statistical_comparison_v2.csv")
+OUT_CSV   = os.path.join(STATS_DIR, "sensitivity_genotype_rate.csv")
 
 N_INDIVIDUALS = 9768
-RATES = [0.98, 1.00]          # baseline, upper bound
+RATES         = [0.98, 1.00]      # baseline, upper bound
 BASELINE_RATE = 0.98
-ALPHA = 0.05
+ALPHA         = 0.05
+MAJORITY      = 4                 # elevated = significantly higher in >= 4 of 6
+
+LOCUS_KEY = ["gene", "rsid"]
 
 GNOMAD_URL = "https://gnomad.broadinstitute.org/api"
 POP_IDS = {
@@ -65,8 +73,8 @@ def fetch_pop_counts(variant_ids):
     rows = []
     for vid in variant_ids:
         try:
-            r = requests.post(GNOMAD_URL, json={"query": query,
-                                                "variables": {"vid": vid}},
+            r = requests.post(GNOMAD_URL,
+                              json={"query": query, "variables": {"vid": vid}},
                               timeout=30)
             data = r.json().get("data", {}).get("variant") or {}
         except Exception as e:                      # network, not absence
@@ -96,6 +104,10 @@ def load_panel():
 
     df = pd.read_csv(IN_CSV)
 
+    for col in LOCUS_KEY + ["population", "af_india", "af_pop"]:
+        if col not in df.columns:
+            sys.exit(f"Required column missing from {IN_CSV}: {col}")
+
     if {"ac_pop", "an_pop"}.issubset(df.columns):
         print("Using AC/AN already stored in statistical_comparison_v2.csv")
         return df
@@ -109,7 +121,7 @@ def load_panel():
         sys.exit("gnomAD returned nothing. Check the connection and retry; "
                  "an empty result here is a timeout, not an absence.")
     merged = df.merge(counts, on=["variant_id", "population"], how="left")
-    missing = merged["ac_pop"].isna().sum()
+    missing = int(merged["ac_pop"].isna().sum())
     if missing:
         print(f"  ! {missing} comparisons unmatched and dropped")
     return merged.dropna(subset=["ac_pop", "an_pop"])
@@ -130,17 +142,20 @@ def run_at_rate(df, rate):
         a, b = ac_i, an_india - ac_i          # India: alt, ref
         c, d = ac_p, an_p - ac_p              # comparison: alt, ref
 
-        table = np.array([[a, b], [c, d]])
-        _, p = stats.fisher_exact(table)
+        _, p = stats.fisher_exact(np.array([[a, b], [c, d]]))
 
-        # Haldane-Anscombe correction only for the CI, so zero cells
-        # do not produce an undefined interval
-        a_, b_, c_, d_ = (a + 0.5, b + 0.5, c + 0.5, d + 0.5) if 0 in (a, b, c, d) \
-            else (a, b, c, d)
+        # Haldane-Anscombe correction for the interval only, so a zero cell
+        # does not give an undefined CI. The Fisher p above is exact and
+        # uncorrected.
+        if 0 in (a, b, c, d):
+            a_, b_, c_, d_ = a + 0.5, b + 0.5, c + 0.5, d + 0.5
+        else:
+            a_, b_, c_, d_ = a, b, c, d
+
         or_point = (a_ * d_) / (b_ * c_)
         se = np.sqrt(1 / a_ + 1 / b_ + 1 / c_ + 1 / d_)
-        lo = np.exp(np.log(or_point) - 1.96 * se)
-        hi = np.exp(np.log(or_point) + 1.96 * se)
+        lo = float(np.exp(np.log(or_point) - 1.96 * se))
+        hi = float(np.exp(np.log(or_point) + 1.96 * se))
 
         out.append({
             "gene": row["gene"],
@@ -149,12 +164,13 @@ def run_at_rate(df, rate):
             "population": row["population"],
             "genotype_rate": rate,
             "an_india": an_india,
+            "ac_india": ac_i,
             "af_india": row["af_india"],
             "af_pop": row["af_pop"],
             "odds_ratio": or_point,
             "or_lower": lo,
             "or_upper": hi,
-            "ci_width_log": np.log(hi) - np.log(lo),
+            "ci_width_log": float(np.log(hi) - np.log(lo)),
             "p_value": p,
         })
 
@@ -162,73 +178,121 @@ def run_at_rate(df, rate):
     rej, q, _, _ = multipletests(res["p_value"], alpha=ALPHA, method="fdr_bh")
     res["q_value"] = q
     res["significant_fdr"] = rej
-    res["direction"] = np.where(res["af_india"] > res["af_pop"], "higher", "lower")
+    res["direction"] = np.where(res["af_india"] > res["af_pop"],
+                                "higher", "lower")
     return res
+
+
+def locus_elevation(res):
+    """Per (gene, rsid): populations where India is significantly higher,
+    out of populations tested, and whether that clears the majority rule."""
+    rows = []
+    for (gene, rsid), grp in res.groupby(LOCUS_KEY, sort=False):
+        sig = grp[grp["significant_fdr"]]
+        n_hi = int((sig["direction"] == "higher").sum())
+        n_lo = int((sig["direction"] == "lower").sum())
+        rows.append({
+            "category": grp["category"].iloc[0],
+            "gene": gene,
+            "rsid": rsid,
+            "n_higher": n_hi,
+            "n_lower": n_lo,
+            "n_tested": len(grp),
+            "elevated": n_hi >= MAJORITY,
+        })
+    return pd.DataFrame(rows).sort_values(["category", "gene", "rsid"])
 
 
 # --------------------------------------------------------------------------
 
 def main():
     df = load_panel()
+    n_loci = df.groupby(LOCUS_KEY).ngroups
     print(f"\nComparisons loaded: {len(df)} "
-          f"({df['gene'].nunique()} loci x {df['population'].nunique()} populations)\n")
+          f"({n_loci} loci x {df['population'].nunique()} populations)\n")
 
     runs = {rate: run_at_rate(df, rate) for rate in RATES}
     for rate, res in runs.items():
         an = int(round(2 * N_INDIVIDUALS * rate))
-        n_sig = int(res["significant_fdr"].sum())
         print(f"GENOTYPE_RATE = {rate:.2f}   AN_india = {an}   "
-              f"significant after FDR: {n_sig}/{len(res)}")
+              f"significant after FDR: "
+              f"{int(res['significant_fdr'].sum())}/{len(res)}")
 
-    key = ["gene", "rsid", "population"]
+    key = LOCUS_KEY + ["population"]
     base = runs[BASELINE_RATE].set_index(key)
     alt_rate = [r for r in RATES if r != BASELINE_RATE][0]
-    alt = runs[alt_rate].set_index(key)
+    alt = runs[alt_rate].set_index(key).reindex(base.index)
 
     cmp = pd.DataFrame({
         "category": base["category"],
         "or_base": base["odds_ratio"],
         "or_alt": alt["odds_ratio"],
+        "ci_width_base": base["ci_width_log"],
+        "ci_width_alt": alt["ci_width_log"],
         "q_base": base["q_value"],
         "q_alt": alt["q_value"],
         "sig_base": base["significant_fdr"],
         "sig_alt": alt["significant_fdr"],
     })
-    cmp["pct_change_or"] = 100 * (cmp["or_alt"] - cmp["or_base"]).abs() / cmp["or_base"]
+    cmp["pct_change_or"] = (100 * (cmp["or_alt"] - cmp["or_base"]).abs()
+                            / cmp["or_base"])
     cmp["log_or_shift"] = (np.log(cmp["or_alt"]) - np.log(cmp["or_base"])).abs()
     cmp["status_changed"] = cmp["sig_base"] != cmp["sig_alt"]
 
     print("\n" + "=" * 70)
     print("SENSITIVITY TO THE INDIAN ALLELE-NUMBER ASSUMPTION")
     print("=" * 70)
-    print(f"Max change in odds ratio      : {cmp['pct_change_or'].max():.3f} %")
-    print(f"Median change in odds ratio   : {cmp['pct_change_or'].median():.3f} %")
-    print(f"Max shift in log odds ratio   : {cmp['log_or_shift'].max():.5f}")
-    print(f"Comparisons changing FDR status: {int(cmp['status_changed'].sum())}")
+    print(f"Max change in odds ratio        : {cmp['pct_change_or'].max():.3f} %")
+    print(f"Median change in odds ratio     : {cmp['pct_change_or'].median():.3f} %")
+    print(f"Max shift in log odds ratio     : {cmp['log_or_shift'].max():.5f}")
+    print(f"Comparisons changing FDR status : {int(cmp['status_changed'].sum())}")
+
+    worst = cmp["pct_change_or"].idxmax()
+    print(f"Largest shift at                : {worst[0]} {worst[1]} vs {worst[2]}")
 
     changed = cmp[cmp["status_changed"]]
     if len(changed):
         print("\nThese comparisons changed significance status:")
         print(changed[["or_base", "or_alt", "q_base", "q_alt",
                        "sig_base", "sig_alt"]].to_string())
-        print("\nEach of these must be named explicitly in Section IV-E.")
+        print("\nEach of these must be named explicitly in Section IV-G.")
     else:
         print("\nNo comparison changes significance status between the bounds.")
 
-    # does the central claim survive?
-    print("\nPER-LOCUS ELEVATION (significantly higher in >= 4 of 6 populations)")
+    # ---- per-locus, keyed on rsid so CYP2C9*2 and *3 stay separate ----
+    print("\nPER-LOCUS ELEVATION "
+          f"(significantly higher in >= {MAJORITY} of 6 populations)")
+    elev = {}
     for rate, res in runs.items():
-        sig = res[res["significant_fdr"]]
-        elevated = (sig.groupby(["category", "gene"])["direction"]
-                      .apply(lambda s: (s == "higher").sum() >= 4))
-        by_cat = elevated.groupby(level=0).agg(["sum", "count"])
-        line = "   ".join(f"{c}: {int(r['sum'])}/{int(r['count'])}"
-                          for c, r in by_cat.iterrows())
-        print(f"  rate {rate:.2f}  ->  {line}")
+        e = locus_elevation(res)
+        elev[rate] = e
+        print(f"\n  GENOTYPE_RATE = {rate:.2f}")
+        for _, r in e.iterrows():
+            flag = "   ELEVATED" if r["elevated"] else ""
+            print(f"    [{r['category']:<8}] {r['gene']:<9} {r['rsid']:<12} "
+                  f"higher {r['n_higher']}/{r['n_tested']}  "
+                  f"lower {r['n_lower']}/{r['n_tested']}{flag}")
+        by_cat = e.groupby("category")["elevated"].agg(["sum", "count"])
+        line = "   ".join(f"{c}: {int(v['sum'])}/{int(v['count'])}"
+                          for c, v in by_cat.iterrows())
+        print(f"    -> {line}")
+
+    # does any locus cross the majority threshold between the bounds?
+    a = elev[BASELINE_RATE].set_index(LOCUS_KEY)["elevated"]
+    b = elev[alt_rate].set_index(LOCUS_KEY)["elevated"].reindex(a.index)
+    flipped = a.index[a.values != b.values]
+    print(f"\n  Loci crossing the majority threshold between bounds: {len(flipped)}")
+    for gene, rsid in flipped:
+        print(f"    {gene} {rsid}: {bool(a.loc[(gene, rsid)])} -> "
+              f"{bool(b.loc[(gene, rsid)])}")
 
     os.makedirs(STATS_DIR, exist_ok=True)
     cmp.reset_index().to_csv(OUT_CSV, index=False)
+    elev_path = OUT_CSV.replace(".csv", "_per_locus.csv")
+    pd.concat([e.assign(genotype_rate=r) for r, e in elev.items()]) \
+      .to_csv(elev_path, index=False)
     print(f"\nSaved to {OUT_CSV}")
+    print(f"Saved to {elev_path}")
 
 
 if __name__ == "__main__":

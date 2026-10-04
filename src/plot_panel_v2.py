@@ -1,3 +1,12 @@
+"""
+plot_panel_v2.py
+
+The five paper figures, in light mode for print.
+
+Reads outputs/multi_gene/full_panel.csv and
+outputs/stats/statistical_comparison_v2.csv; writes five PNGs to figures/.
+"""
+
 import os
 import sys
 import time
@@ -8,8 +17,14 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+BASE  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PANEL = os.path.join(BASE, "outputs", "multi_gene", "full_panel.csv")
+STATS = os.path.join(BASE, "outputs", "stats", "statistical_comparison_v2.csv")
+FIG   = os.path.join(BASE, "figures")
+SUFFIX = "_light"
+
 print("=" * 60)
-print("figures_light.py starting")
+print("plot_panel_v2.py starting")
 print("python:", sys.executable)
 print("script:", os.path.abspath(__file__))
 print("=" * 60)
@@ -32,12 +47,7 @@ mpl.rcParams.update({
     "legend.edgecolor":  "0.7",
 })
 
-PANEL = r"D:\GENOMEINDIA\outputs\multi_gene\full_panel.csv"
-STATS = r"D:\GENOMEINDIA\outputs\stats\statistical_comparison_v2.csv"
-FIG   = r"D:\GENOMEINDIA\figures"
-SUFFIX = "_light"
-
-SPINE = "#999999"
+SPINE  = "#999999"
 NONSIG = "#A6A6A6"
 
 POP_LABELS = {
@@ -52,7 +62,7 @@ POP_COLORS = {
     "gnomad_amr_af": "#117A65", "gnomad_mid_af": "#A93226",
 }
 CAT_COLORS = {"disease": "#2471A3", "pgx": "#C0392B", "control": "#4D5656"}
-mkdir src outputs figuresCAT_LABELS = {"disease": "Disease susceptibility", "pgx": "Pharmacogenomic",
+CAT_LABELS = {"disease": "Disease susceptibility", "pgx": "Pharmacogenomic",
               "control": "Positive control"}
 
 
