@@ -41,24 +41,18 @@ unreliable under load; the scripts retry and cache responses.
 
 ## Requirements
 
-    pip install -r requirements.txt
-
-Python 3.11 or later. The scripts use pandas, numpy, scipy, statsmodels,
-matplotlib and requests.
+```bash
+pip install -r requirements.txt
+```
 
 ## Running
 
-    python src/multi_gene_comparison.py     # locate and validate each locus
-python src/statistical_analysis_v2.py   # Fisher exact, FDR, odds ratios, FST   
+```bash
+python src/multi_gene_comparison.py     # locate and validate each locus
+python src/statistical_analysis_v2.py   # Fisher exact, FDR, odds ratios, FST
 python src/sensitivity_analysis.py      # allele-number sensitivity check
-    python src/plot_panel_v2.py             # the five paper figures
-
-`multi_gene_comparison.py` must run first; the others read its output.
-Expect `statistical_analysis_v2.py` to take several minutes, since it queries
-gnomAD per locus with retries. Responses are cached, so reruns are fast.
-
-Paths in the scripts are relative to the repository root. If you have moved
-files, check the constants at the top of each script.
+python src/plot_panel_v2.py             # the five paper figures
+```
 
 ## Outputs
 
