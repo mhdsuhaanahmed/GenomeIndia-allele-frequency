@@ -114,8 +114,14 @@ if __name__ == "__main__":
             if an_pop < 100:
                 continue
 
+            # Fisher exact rather than chi-square: several loci in this panel
+            # have expected cell counts far below the chi-square approximation's
+            # validity threshold (ALDH2 is one Indian alternate copy; DPYD is
+            # zero against East Asian), and those are exactly the comparisons
+            # the validations rest on.
             tbl = [[ac_india, an_india - ac_india], [ac_pop, an_pop - ac_pop]]
-            chi2, p_chi, _, _ = stats.chi2_contingency(tbl, correction=False)
+            _, p_val = stats.fisher_exact(tbl)
+
             orv, or_lo, or_hi = odds_ratio_ci(ac_india, an_india - ac_india,
                                               ac_pop, an_pop - ac_pop)
 
@@ -135,7 +141,7 @@ if __name__ == "__main__":
                 "ac_pop": ac_pop, "an_pop": an_pop,
                 "odds_ratio": round(orv, 4), "or_95ci": f"{or_lo:.3f}-{or_hi:.3f}",
                 "or_lower": or_lo, "or_upper": or_hi,
-                "chi2": round(chi2, 2), "p_value": p_chi,
+                "p_value": p_val,
                 "fst_locus": round(num/den, 5) if den else np.nan,
             })
 
