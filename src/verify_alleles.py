@@ -101,7 +101,8 @@ def get(url, retries=4):
 
 
 def vep(rsid):
-    return get(f"{ENSEMBL}/vep/human/id/{rsid}?content-type=application/json")
+    return get(f"{ENSEMBL}/vep/human/id/{rsid}"
+               f"?content-type=application/json&hgvs=1")
 
 
 def consequences_by_allele(entry, gene):
@@ -214,8 +215,7 @@ def main():
                 pos = ",".join(str(p) for p in sorted(r["pos"])) or "-"
                 terms = ",".join(sorted(r["terms"]))[:39]
                 mark = "  <-- matched" if allele == t["matched_allele"] else ""
-                print(f"  {allele:<9}{aa:<9}{pos:<7}{terms:<40}{mark}")
-
+                print(f"  {allele:<9}{aa:<12}{pos[:28]:<30}{terms:<40}{mark}")
             check = verify_protein if t["method"] == "protein" else verify_hgvs
             verdict, reason = check(t, by_allele)
             break
