@@ -53,6 +53,10 @@ python src/statistical_analysis_v2.py   # Fisher exact, FDR, odds ratios, FST
 python src/sensitivity_analysis.py      # allele-number sensitivity check
 python src/plot_panel_v2.py             # the five paper figures
 ```
+Three supporting scripts are not part of the main pipeline: verify_alleles.py
+(allele-identity confirmation against Ensembl VEP and dbSNP), window_search.py
+(the VKORC1 absence check), and query_gnomad_variant.py (direct variant-ID
+lookup, used to resolve the multi-allelic CYP2C19 site).
 
 ## Outputs
 
